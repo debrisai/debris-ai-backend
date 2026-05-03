@@ -1,5 +1,5 @@
 // api/analyze.js — Vercel Serverless Function
-// Receives a base64 image, sends to OpenAI GPT-4o Vision, returns debris analysis
+// Receives a base64 image, sends to Groq Vision API, returns debris analysis
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,15 +21,15 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: 'No image provided' });
     }
 
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-    if (!OPENAI_API_KEY) {
+    if (!GROQ_API_KEY) {
       return res.status(500).json({ error: 'API key not configured' });
     }
 
     const prompt = `You are Debris AI — an expert system for analyzing rubble, debris, and discarded materials to determine their reuse and repurposing potential.
 
-Analyze this image carefully. Respond ONLY in the following JSON format, no markdown, no backticks, no extra text:
+Analyze this image carefully. Respond ONLY in valid JSON format, no markdown, no backticks, no extra text:
 
 {
   "summary": "One sentence describing what you see overall",
@@ -50,7 +50,7 @@ Analyze this image carefully. Respond ONLY in the following JSON format, no mark
           "category": "Category"
         },
         {
-          "idea": "A creative/unexpected suggestion most people wouldn't think of",
+          "idea": "A creative unexpected suggestion most people would not think of",
           "difficulty": "Easy / Medium / Hard",
           "category": "Category"
         }
@@ -63,18 +63,20 @@ Analyze this image carefully. Respond ONLY in the following JSON format, no mark
   "environmental_impact": "Brief note on environmental benefit of reusing vs discarding"
 }
 
-Be creative with reuse ideas — not just construction. Think: motors from scrap metal, planters from concrete chunks, insulation from textiles, art installations, water filtration, furniture, energy generation, tools, agricultural uses. The more creative and practical, the better.
+Be creative with reuse ideas. Think motors from scrap metal, planters from concrete, insulation from textiles, art installations, water filtration, furniture, energy generation, tools, agricultural uses.
 
-If the image doesn't contain debris or materials, still respond in JSON format but set summary to explain what you see and return an empty materials array.`;
+If the image does not contain debris or materials, still respond in JSON format but set summary to explain what you see and return an empty materials array.
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+IMPORTANT: Return ONLY the JSON object. No other text.`;
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'llama-4-scout-17b-16e-instruct',
         messages: [
           {
             role: 'user',
@@ -84,7 +86,6 @@ If the image doesn't contain debris or materials, still respond in JSON format b
                 type: 'image_url',
                 image_url: {
                   url: `data:image/jpeg;base64,${image}`,
-                  detail: 'low',
                 },
               },
             ],
@@ -98,8 +99,8 @@ If the image doesn't contain debris or materials, still respond in JSON format b
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('OpenAI API error:', JSON.stringify(data));
-      return res.status(500).json({ error: 'OpenAI API error', details: data });
+      console.error('Groq API error:', JSON.stringify(data));
+      return res.status(500).json({ error: 'Groq API error', details: data });
     }
 
     const text = data.choices?.[0]?.message?.content || '';

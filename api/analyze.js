@@ -1,7 +1,7 @@
 // api/analyze.js — Vercel Serverless Function
 // Receives a base64 image, sends to Gemini Vision, returns debris analysis
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -47,7 +47,7 @@ Analyze this image carefully. Respond ONLY in the following JSON format, no mark
         },
         {
           "idea": "Another suggestion",
-          "difficulty": "Easy / Medium / Hard", 
+          "difficulty": "Easy / Medium / Hard",
           "category": "Category"
         },
         {
@@ -128,4 +128,4 @@ If the image doesn't contain debris or materials, still respond in JSON format b
     console.error('Server error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
-}
+};

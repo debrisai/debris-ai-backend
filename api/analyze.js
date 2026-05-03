@@ -1,8 +1,7 @@
 // api/analyze.js — Vercel Serverless Function
-// Receives a base64 image, sends to Gemini Vision, returns debris analysis
+// Receives a base64 image, sends to OpenAI GPT-4o Vision, returns debris analysis
 
 module.exports = async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -16,15 +15,15 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { image } = req.body; // base64 string (without data:image prefix)
+    const { image } = req.body;
 
     if (!image) {
       return res.status(400).json({ error: 'No image provided' });
     }
 
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-    if (!GEMINI_API_KEY) {
+    if (!OPENAI_API_KEY) {
       return res.status(500).json({ error: 'API key not configured' });
     }
 
@@ -68,51 +67,49 @@ Be creative with reuse ideas — not just construction. Think: motors from scrap
 
 If the image doesn't contain debris or materials, still respond in JSON format but set summary to explain what you see and return an empty materials array.`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                {
-                  inline_data: {
-                    mime_type: 'image/jpeg',
-                    data: image,
-                  },
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${image}`,
+                  detail: 'low',
                 },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
+              },
+            ],
           },
-        }),
-      }
-    );
+        ],
+        max_tokens: 2048,
+        temperature: 0.7,
+      }),
+    });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Gemini API error:', JSON.stringify(data));
-      return res.status(500).json({ error: 'Gemini API error', details: data });
+      console.error('OpenAI API error:', JSON.stringify(data));
+      return res.status(500).json({ error: 'OpenAI API error', details: data });
     }
 
-    // Extract text from Gemini response
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = data.choices?.[0]?.message?.content || '';
 
-    // Clean and parse JSON
     const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
     let analysis;
     try {
       analysis = JSON.parse(cleaned);
     } catch (parseErr) {
-      // If JSON parse fails, return raw text
       return res.status(200).json({
         summary: text,
         materials: [],
